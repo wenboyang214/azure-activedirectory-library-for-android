@@ -74,9 +74,20 @@ public class MockBrokerAccountService extends Service {
         @Override
         public synchronized Bundle acquireTokenSilently(Map requestParameters) throws RemoteException {
             final Bundle bundle = new Bundle();
-            if(requestParameters.containsKey("isConnectionAvailable")) {
+            if (requestParameters.containsKey("isConnectionAvailable")) {
                 bundle.putInt(AccountManager.KEY_ERROR_CODE, AccountManager.ERROR_CODE_NETWORK_ERROR);
                 bundle.putString(AccountManager.KEY_ERROR_MESSAGE, ADALError.DEVICE_CONNECTION_IS_NOT_AVAILABLE.getDescription());
+            } else if (requestParameters.containsKey("throwRemoteException")) {
+                throw new RemoteException();
+            } else if (requestParameters.containsKey("throwOperationCanceledException")) {
+                bundle.putInt(AccountManager.KEY_ERROR_CODE, AccountManager.ERROR_CODE_CANCELED);
+                bundle.putString(AccountManager.KEY_ERROR_MESSAGE, ADALError.AUTH_FAILED_CANCELLED.getDescription());
+            } else if (requestParameters.containsKey("throwAuthenticatorException")) {
+                bundle.putInt(AccountManager.KEY_ERROR_CODE, AccountManager.ERROR_CODE_BAD_REQUEST);
+                bundle.putString(AccountManager.KEY_ERROR_MESSAGE, ADALError.BROKER_AUTHENTICATOR_ERROR_GETAUTHTOKEN.getDescription());
+            } else if (requestParameters.containsKey("throwIOException")) {
+                bundle.getString(AuthenticationConstants.OAuth2.ERROR, ADALError.IO_EXCEPTION.toString());
+                bundle.getString(AuthenticationConstants.OAuth2.ERROR_DESCRIPTION, ADALError.IO_EXCEPTION.getDescription());
             } else {
                 bundle.putString(AccountManager.KEY_AUTHTOKEN, ACCESS_TOKEN);
             }

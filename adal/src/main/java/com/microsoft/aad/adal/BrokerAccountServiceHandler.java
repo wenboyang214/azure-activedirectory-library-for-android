@@ -151,7 +151,16 @@ final class BrokerAccountServiceHandler {
 
         final Throwable throwable = exception.getAndSet(null);
         if (throwable != null) {
-            throw new AuthenticationException(ADALError.AUTH_REFRESH_FAILED_PROMPT_NOT_ALLOWED, throwable.getMessage(), throwable);
+            if (throwable instanceof RemoteException) {
+                Logger.e(TAG, "Get error when trying to get token from broker: " + throwable.getMessage(), "", ADALError.BROKER_AUTHENTICATOR_NOT_RESPONDING, throwable);
+                throw new AuthenticationException(ADALError.BROKER_AUTHENTICATOR_NOT_RESPONDING, throwable.getMessage(), throwable);
+            } else if (throwable instanceof InterruptedException) {
+                Logger.v(TAG, "The thread is interrupted while it is sleeping. "  + throwable.getMessage());
+                //Should it throw the InterruptedException?
+            } else {
+                Logger.e(TAG, "Get error when trying to bond the broker account service." + throwable.getMessage(), "", ADALError.BROKER_AUTHENTICATOR_NOT_RESPONDING, throwable);
+                throw new AuthenticationException(ADALError.BROKER_AUTHENTICATOR_NOT_RESPONDING, throwable.getMessage(), throwable);
+            }
         }
 
         return bundleResult.getAndSet(null);

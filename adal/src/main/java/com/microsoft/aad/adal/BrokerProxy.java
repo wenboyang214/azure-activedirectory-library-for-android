@@ -318,6 +318,7 @@ class BrokerProxy implements IBrokerProxy {
         } else {
             bundleResult = getAuthTokenFromAccountManager(request, requestBundle);
         }
+
         if (bundleResult == null) {
             Logger.v(TAG, "No bundle result returned from broker for silent request.");
             return null;
@@ -349,29 +350,34 @@ class BrokerProxy implements IBrokerProxy {
                 // Making blocking request here
                 Logger.v(TAG, "Received result from broker");
                 bundleResult = result.getResult();
-            } catch (OperationCanceledException e) {
+            } catch (final OperationCanceledException e) {
+                // If the request was canceled for any reason
                 Logger.e(TAG, AUTHENTICATOR_CANCELS_REQUEST, "", ADALError.AUTH_FAILED_CANCELLED, e);
-            } catch (AuthenticatorException e) {
-                Logger.e(TAG, AUTHENTICATOR_CANCELS_REQUEST, "", ADALError.BROKER_AUTHENTICATOR_NOT_RESPONDING);
+                throw new AuthenticationException(ADALError.AUTH_FAILED_CANCELLED, e.getMessage(), e);
+            } catch (final AuthenticatorException e) {
+                // If there was an error communicating with the authenticator or if the authenticator returned an invalid response
+                Logger.e(TAG, AUTHENTICATOR_CANCELS_REQUEST, "", ADALError.BROKER_AUTHENTICATOR_ERROR_GETAUTHTOKEN);
                 if (e.getMessage() != null && e.getMessage().contains(ADALError.DEVICE_CONNECTION_IS_NOT_AVAILABLE.getDescription())) {
                     throw new AuthenticationException(ADALError.DEVICE_CONNECTION_IS_NOT_AVAILABLE,
                             "Received error from broker, errorCode: " + e.getMessage());
                 } else if (e.getMessage() != null && e.getMessage().contains(ADALError.NO_NETWORK_CONNECTION_POWER_OPTIMIZATION.getDescription())) {
                     throw new AuthenticationException(ADALError.NO_NETWORK_CONNECTION_POWER_OPTIMIZATION,
                             "Received error from broker, errorCode: " + e.getMessage());
+                } else {
+                    throw new AuthenticationException(ADALError.BROKER_AUTHENTICATOR_ERROR_GETAUTHTOKEN, e.getMessage());
                 }
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 // Authenticator gets problem from webrequest or file read/write
                 Logger.e(TAG, AUTHENTICATOR_CANCELS_REQUEST, "", ADALError.BROKER_AUTHENTICATOR_IO_EXCEPTION);
+                throw new AuthenticationException(ADALError.BROKER_AUTHENTICATOR_IO_EXCEPTION, e.getMessage(), e);
             }
 
             Logger.v(TAG, "Returning result from broker");
             return bundleResult;
         } else {
             Logger.v(TAG, "Target account is not found");
+            return null;
         }
-
-        return null;
     }
 
     private boolean isBrokerAccountServiceSupported() {
@@ -447,8 +453,13 @@ class BrokerProxy implements IBrokerProxy {
 
             throw new AuthenticationException(adalErrorCode, msg);
         } else if (!StringExtensions.isNullOrBlank(oauth2ErrorCode) && request.isSilent()) {
-            throw new AuthenticationException(ADALError.AUTH_REFRESH_FAILED_PROMPT_NOT_ALLOWED,
-                    "Received error from broker, errorCode: " + oauth2ErrorCode + "; ErrorDescription: " + oauth2ErrorDescription);
+            if (oauth2ErrorCode.equalsIgnoreCase(ADALError.IO_EXCEPTION.toString())) {
+                throw new AuthenticationException(ADALError.BROKER_AUTHENTICATOR_IO_EXCEPTION,
+                        "Received IO exception from broker, errorCode: " + oauth2ErrorCode + "; ErrorDescription: " + oauth2ErrorDescription);
+            } else {
+                throw new AuthenticationException(ADALError.AUTH_REFRESH_FAILED_PROMPT_NOT_ALLOWED,
+                        "Received OAuth2 error from broker, errorCode: " + oauth2ErrorCode + "; ErrorDescription: " + oauth2ErrorDescription);
+            }
         } else {
             boolean initialRequest = bundleResult.getBoolean(AuthenticationConstants.Broker.ACCOUNT_INITIAL_REQUEST);
             if (initialRequest) {
